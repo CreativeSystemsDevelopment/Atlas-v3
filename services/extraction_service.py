@@ -3,9 +3,12 @@ Extraction Service for orchestrating schematic extraction workflow.
 Handles sequential page processing with streaming results.
 """
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Generator, Tuple
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
@@ -146,13 +149,21 @@ class ExtractionService:
                     legend_page=context_page_indices[1] if len(context_page_indices) > 1 else 2
                 )
                 
-                # Step 3: Detect page numbers
+                # Step 3: Detect page numbers using Gemini
                 yield self._emit(ExtractionEvent.PROGRESS, {
                     "status": "detecting_pages",
-                    "message": "Detecting schematic page numbers..."
+                    "message": "Detecting schematic page numbers with AI..."
                 }, schematic_file.id)
                 
-                page_mapping = processor.detect_all_page_numbers(pdf_page_indices)
+                # Use Gemini to detect page numbers (more accurate than regex)
+                page_mapping = {}
+                for pdf_idx in pdf_page_indices:
+                    try:
+                        schematic_num = self.gemini.detect_page_number(file_uri, pdf_idx)
+                        page_mapping[pdf_idx] = schematic_num
+                    except Exception as e:
+                        logger.warning(f"Gemini page detection failed for page {pdf_idx}: {e}")
+                        page_mapping[pdf_idx] = None
                 
                 # Store page mappings
                 for pdf_idx, schematic_num in page_mapping.items():
