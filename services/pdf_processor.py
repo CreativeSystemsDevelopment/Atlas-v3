@@ -143,15 +143,18 @@ class PDFProcessor:
     
     def _detect_page_number_from_page(self, page) -> Optional[int]:
         """Extract page number from a pdfplumber page object."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Get page dimensions
         width = page.width
         height = page.height
         
         # Focus on bottom-right quadrant (title block area)
-        # Typically within the last 20% of width and 15% of height
+        # Expand area to be more forgiving - last 50% width, last 25% height
         crop_box = (
-            width * 0.6,   # left
-            height * 0.85,  # top
+            width * 0.5,   # left
+            height * 0.75,  # top
             width,          # right
             height          # bottom
         )
@@ -159,18 +162,32 @@ class PDFProcessor:
         try:
             cropped = page.within_bbox(crop_box)
             text = cropped.extract_text() or ""
-        except Exception:
+            logger.debug(f"Title block text extracted: {text[:200] if text else 'None'}")
+        except Exception as e:
+            logger.warning(f"Crop failed: {e}, using full page")
             # Fallback to full page
             text = page.extract_text() or ""
         
-        # Find page number pattern
+        # Find page number pattern (e.g., "1/207", "25/207")
         matches = self.PAGE_NUMBER_PATTERN.findall(text)
+        logger.debug(f"Page number matches: {matches}")
         
         if matches:
             # Take the last match (most likely to be the page number)
             page_num, total = matches[-1]
+            logger.info(f"Detected schematic page: {page_num}/{total}")
             return int(page_num)
         
+        # Also try looking in full page if not found
+        if not matches:
+            full_text = page.extract_text() or ""
+            all_matches = self.PAGE_NUMBER_PATTERN.findall(full_text)
+            if all_matches:
+                page_num, total = all_matches[-1]
+                logger.info(f"Detected schematic page from full text: {page_num}/{total}")
+                return int(page_num)
+        
+        logger.warning("Could not detect schematic page number")
         return None
     
     def detect_all_page_numbers(

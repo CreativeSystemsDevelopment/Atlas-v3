@@ -96,6 +96,11 @@ header {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* Generic hidden utility class */
+.hidden {
+    display: none !important;
+}
+
 .section.hidden {
     display: none;
 }
