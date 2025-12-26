@@ -32,6 +32,7 @@ class Config:
     # Gemini 3 API Configuration
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-pro-preview")
+    GEMINI_MODEL_IMAGE = os.getenv("GEMINI_MODEL_IMAGE", "gemini-3-pro-image-preview")
     GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", "gemini-3-flash-preview")
     GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.1"))
     GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "medium")  # low/medium/high

@@ -97,6 +97,7 @@ function showContextSection() {
 async function handleStartExtraction() {
     const instructionsPage = parseInt(elements.instructionsPage.value) - 1; // Convert to 0-based
     const legendPage = parseInt(elements.legendPage.value) - 1;
+    const selectedModel = elements.geminiModel.value;
     
     try {
         // Start extraction
@@ -105,7 +106,8 @@ async function handleStartExtraction() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 schematic_file_id: currentSchematicFileId,
-                context_pages: [instructionsPage, legendPage]
+                context_pages: [instructionsPage, legendPage],
+                model: selectedModel
             })
         });
         
@@ -441,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         contextSection: document.getElementById('context-section'),
         instructionsPage: document.getElementById('instructions-page'),
         legendPage: document.getElementById('legend-page'),
+        geminiModel: document.getElementById('gemini-model'),
         startExtractionBtn: document.getElementById('start-extraction-btn'),
         
         // Extraction section

@@ -160,14 +160,16 @@ class GeminiService:
         
         logger.info(f"Uploading file to Gemini: {file_path.name}")
         
-        # Upload with retry - using file object, not path
+        # Upload with retry - using file path and config
         for attempt in range(self.max_retries):
             try:
-                with open(file_path, 'rb') as f:
-                    uploaded_file = self.client.files.upload(
-                        file=f,
-                        display_name=display_name or file_path.name
+                uploaded_file = self.client.files.upload(
+                    file=str(file_path),
+                    config=types.UploadFileConfig(
+                        display_name=display_name or file_path.name,
+                        mime_type="application/pdf"
                     )
+                )
                 logger.info(f"File uploaded: {uploaded_file.name}")
                 
                 self._file_cache[cache_key] = uploaded_file

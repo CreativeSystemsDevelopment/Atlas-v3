@@ -57,6 +57,15 @@
                     <label for="legend-page">Symbol Legend Page</label>
                     <input type="number" id="legend-page" value="3" min="1">
                 </div>
+                
+                <div class="form-group">
+                    <label for="gemini-model">AI Model</label>
+                    <select id="gemini-model">
+                        <option value="gemini-3-pro-preview">Gemini 3 Pro (Text)</option>
+                        <option value="gemini-3-pro-image-preview">Gemini 3 Pro (Image)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
+                    </select>
+                </div>
             </div>
             
             <button id="start-extraction-btn" class="primary glow-hover">Start Extraction</button>
