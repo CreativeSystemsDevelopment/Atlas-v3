@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schematic Extraction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(1, 9999999) | random }}">
+    <script>console.log('CSS cache bust loaded');</script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1 class="title">Schematic Extraction</h1>
+            <p class="subtitle">Industrial Diagram Analysis</p>
+        </header>
+
+        <!-- Upload Section -->
+        <section id="upload-section" class="section">
+            <h2>Upload Schematic</h2>
+            
+            <div class="form-group">
+                <label for="machine-name">Machine / Line</label>
+                <input type="text" id="machine-name" placeholder="Enter machine name...">
+            </div>
+            
+            <div class="form-group">
+                <input type="file" id="pdf-file" accept=".pdf" class="file-input-hidden">
+                <div id="file-label" class="file-label glow-hover">
+                    <span id="file-name">Choose PDF file...</span>
+                </div>
+            </div>
+            
+            <div id="duplicate-warning" class="warning hidden">
+                <p id="duplicate-message"></p>
+                <div class="button-group">
+                    <button id="replace-btn" class="glow-hover">Replace</button>
+                    <button id="skip-btn" class="glow-hover">Skip</button>
+                </div>
+            </div>
+            
+            <button id="upload-btn" class="primary glow-hover" disabled>Upload</button>
+        </section>
+
+        <!-- Context Pages Section -->
+        <section id="context-section" class="section hidden">
+            <h2>Context Pages</h2>
+            <p class="hint">Specify PDF page numbers for reading instructions and symbol legend</p>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="instructions-page">Reading Instructions Page</label>
+                    <input type="number" id="instructions-page" value="2" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="legend-page">Symbol Legend Page</label>
+                    <input type="number" id="legend-page" value="3" min="1">
+                </div>
+            </div>
+            
+            <button id="start-extraction-btn" class="primary glow-hover">Start Extraction</button>
+        </section>
+
+        <!-- Extraction Progress Section -->
+        <section id="extraction-section" class="section hidden">
+            <h2>Extraction Progress</h2>
+            
+            <div id="progress-status">
+                <span id="status-text">Preparing...</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            
+            <div class="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+            
+            <!-- Streaming Results Table -->
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Mark / Label</th>
+                            <th>PDF Page</th>
+                            <th>Schematic Page</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body">
+                        <!-- Results streamed here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="extraction-summary" class="hidden">
+                <h3>Extraction Complete</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-value" id="total-components">0</span>
+                        <span class="stat-label">Components</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="total-connections">0</span>
+                        <span class="stat-label">Connections</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" id="total-wire-labels">0</span>
+                        <span class="stat-label">Wire Labels</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search Section -->
+        <section id="search-section" class="section hidden">
+            <h2>Search Components</h2>
+            
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search by mark, name, or description...">
+                <button id="search-btn" class="glow-hover">Search</button>
+            </div>
+            
+            <div id="search-results" class="results-list">
+                <!-- Search results here -->
+            </div>
+        </section>
+
+        <!-- Component Detail Section -->
+        <section id="detail-section" class="section hidden">
+            <h2>Component Details</h2>
+            
+            <div id="component-info">
+                <!-- Component details here -->
+            </div>
+            
+            <div id="connections-list">
+                <h3>Connections</h3>
+                <!-- Connections here -->
+            </div>
+            
+            <button id="view-pdf-btn" class="glow-hover">View in PDF</button>
+            <button id="back-to-search-btn" class="glow-hover">Back to Search</button>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}?v={{ range(1, 9999999) | random }}"></script>
+</body>
+</html>
+
