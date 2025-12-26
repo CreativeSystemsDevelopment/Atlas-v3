@@ -47,6 +47,8 @@ uploads/
 *.pdf
 pdfs/
 schematics/
+01_INSTRUCTION MANUAL/
+1650_set/
 
 # Logs
 *.log
