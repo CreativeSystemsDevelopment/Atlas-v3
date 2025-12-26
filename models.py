@@ -117,6 +117,9 @@ class SchematicPage(Base):
     schematic_file_id = Column(Integer, ForeignKey("schematic_files.id"), nullable=False)
     pdf_page_index = Column(Integer, nullable=False)  # 0-based
     schematic_page_number = Column(Integer, nullable=True)  # From title block, e.g., 1, 2, 3
+    schematic_total = Column(Integer, nullable=True)  # Total pages from title block (Y in X/Y)
+    dwg_no = Column(String(100), nullable=True)  # Drawing number (DWG NO.)
+    drawing_title = Column(String(255), nullable=True)  # Title of drawing (inferred)
     width = Column(Float, nullable=True)  # Page width in points
     height = Column(Float, nullable=True)  # Page height in points
     detection_confidence = Column(Float, default=1.0)

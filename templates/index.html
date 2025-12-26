@@ -65,6 +65,27 @@
         <!-- Extraction Progress Section -->
         <section id="extraction-section" class="section hidden">
             <h2>Extraction Progress</h2>
+
+            <div id="mapping-section" class="hidden">
+                <div class="mapping-header">
+                    <h3>Detected Title Block Mapping</h3>
+                    <span id="mapping-status" class="mapping-status">Detecting...</span>
+                </div>
+                <div class="table-container small">
+                    <table id="mapping-table">
+                        <thead>
+                            <tr>
+                                <th>PDF Page</th>
+                                <th>Schematic Page</th>
+                                <th>DWG No.</th>
+                                <th>Drawing Title</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mapping-body"></tbody>
+                    </table>
+                </div>
+            </div>
             
             <div id="progress-status">
                 <span id="status-text">Preparing...</span>

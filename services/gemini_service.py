@@ -279,15 +279,21 @@ class GeminiService:
         pdf_page_indices: List[int]
     ) -> Dict[int, Optional[int]]:
         """
-        Detect schematic page numbers for multiple pages in one call.
-        More efficient than calling detect_page_number multiple times.
+        Detect title-block metadata for multiple pages in one call.
+        Returns mapping for each requested pdf_page_index with:
+        - schematic_page_number (X in X/Y)
+        - schematic_total (Y in X/Y)
+        - dwg_no (DWG NO. field)
+        - drawing_title (title text, inferred)
+        - confidence
+        - raw_text (optional, best effort)
         
         Args:
             file_uri: Cached file URI
             pdf_page_indices: List of 0-based page indices to check
             
         Returns:
-            Dict mapping pdf_page_index -> schematic_page_number (or None)
+            Dict mapping pdf_page_index -> dict of fields (values may be None)
         """
         if not pdf_page_indices:
             return {}
@@ -299,28 +305,28 @@ class GeminiService:
 For each of the following PDF pages: {page_list}
 
 Look at the title block (usually at the bottom right of each page).
-Find the schematic page number in the format "X/Y" (e.g., "1/207" means schematic page 1 of 207 total).
-The "X" is the schematic page number we need.
+Extract:
+- schematic_page_number: X in the diagonal slash box X/Y (full-width digits possible, e.g., １/２０７).
+- schematic_total: Y in that same box.
+- dwg_no: text labeled \"DWG NO.\" in the title block.
+- drawing_title: the drawing title text near or within the title block (e.g., \"MAIN POWER POWER LAMP\"), even if unlabeled.
+- confidence: your confidence 0.0-1.0.
+- raw_text: optional short snippet of the title-block text you used.
 
-Return a JSON object mapping PDF page numbers to schematic page numbers:
+Return JSON only, with this shape:
 {{
-  "page_mapping": {{
-    "<pdf_page_number>": <schematic_page_number or null>
-  }},
-  "total_schematic_pages": <total from any page's X/Y format or null>
-}}
-
-Example:
-{{
-  "page_mapping": {{
-    "7": 1,
-    "8": 2,
-    "9": 3
-  }},
-  "total_schematic_pages": 207
-}}
-
-Only return the JSON object, nothing else."""
+  "pages": [
+    {{
+      "pdf_page": <number, 1-based>,
+      "schematic_page_number": <number or null>,
+      "schematic_total": <number or null>,
+      "dwg_no": <string or null>,
+      "drawing_title": <string or null>,
+      "confidence": <number or null>,
+      "raw_text": <string or null>
+    }}
+  ]
+}}"""
         
         file_ref = genai.get_file(file_uri.split("/")[-1]) if "/" in file_uri else genai.get_file(file_uri)
         
@@ -354,10 +360,10 @@ Only return the JSON object, nothing else."""
             "required": ["page_mapping"]
         }
         
+        # NOTE: response_schema support can be flaky; use plain JSON parsing with validation instead.
         generation_config = {
             "temperature": 0.1,
             "response_mime_type": "application/json",
-            "response_schema": schema
         }
         
         model = self._get_model(use_flash=True)
@@ -371,19 +377,61 @@ Only return the JSON object, nothing else."""
             )
             
             import json
-            result = json.loads(response.text)
-            page_mapping_items = result.get("page_mapping", []) or []
+            raw_text = response.text or ""
+            logger.debug(f"Page detection raw response (first 800 chars): {raw_text[:800]}")
             
-            # Build dict from array items
-            page_mapping = {}
-            for item in page_mapping_items:
-                pdf_page_num = item.get("pdf_page")
-                schematic_num = item.get("schematic_page_number")
-                if pdf_page_num is not None:
-                    page_mapping[int(pdf_page_num) - 1] = schematic_num  # convert to 0-based
+            # Try strict JSON first
+            try:
+                result = json.loads(raw_text)
+            except Exception:
+                # Attempt to extract JSON object manually
+                import re
+                match = re.search(r"\\{.*\\}", raw_text, re.DOTALL)
+                if match:
+                    result = json.loads(match.group(0))
+                else:
+                    raise
             
-            # Ensure all requested pages are present
-            result_mapping = {idx: page_mapping.get(idx) for idx in pdf_page_indices}
+            pages_any = result.get("pages", []) or []
+            
+            # Normalize to dict[int -> dict]
+            page_mapping: Dict[int, Dict[str, Any]] = {}
+            if isinstance(pages_any, list):
+                for item in pages_any:
+                    if not isinstance(item, dict):
+                        continue
+                    pdf_page_num = item.get("pdf_page")
+                    if pdf_page_num is None:
+                        continue
+                    try:
+                        pdf_idx = int(pdf_page_num) - 1  # convert to 0-based
+                    except Exception:
+                        continue
+                    def as_int(val):
+                        try:
+                            return int(val)
+                        except Exception:
+                            return None
+                    page_mapping[pdf_idx] = {
+                        "schematic_page_number": as_int(item.get("schematic_page_number")),
+                        "schematic_total": as_int(item.get("schematic_total")),
+                        "dwg_no": item.get("dwg_no"),
+                        "drawing_title": item.get("drawing_title"),
+                        "confidence": item.get("confidence"),
+                        "raw_text": item.get("raw_text")
+                    }
+            
+            # Ensure all requested pages are present (fill with None mapping)
+            result_mapping = {}
+            for idx in pdf_page_indices:
+                result_mapping[idx] = page_mapping.get(idx, {
+                    "schematic_page_number": None,
+                    "schematic_total": None,
+                    "dwg_no": None,
+                    "drawing_title": None,
+                    "confidence": None,
+                    "raw_text": None
+                })
             
             logger.info(f"Detected page mapping: {result_mapping}")
             return result_mapping

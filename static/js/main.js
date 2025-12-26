@@ -129,6 +129,15 @@ function startExtractionStream() {
     // Clear previous results
     elements.resultsBody.innerHTML = '';
     elements.extractionSummary.classList.add('hidden');
+    if (elements.mappingSection) {
+        elements.mappingSection.classList.add('hidden');
+    }
+    if (elements.mappingBody) {
+        elements.mappingBody.innerHTML = '';
+    }
+    if (elements.mappingStatus) {
+        elements.mappingStatus.textContent = 'Detecting...';
+    }
     
     // Connect to SSE stream
     eventSource = new EventSource(`/api/extract/${currentSchematicFileId}/stream`);
@@ -149,6 +158,9 @@ function handleExtractionEvent(event) {
     const { type, data } = event;
     
     switch (type) {
+        case 'page_mapping':
+            renderMapping(data.pages || []);
+            break;
         case 'progress':
             updateProgress(data);
             break;
@@ -210,6 +222,41 @@ function addResultRow(type, mark, pdfPage, schematicPage, details) {
     if (container) {
         container.scrollTop = container.scrollHeight;
     }
+}
+
+function renderMapping(pages = []) {
+    if (!elements.mappingSection || !elements.mappingBody || !elements.mappingStatus) return;
+    
+    elements.mappingSection.classList.remove('hidden');
+    elements.mappingBody.innerHTML = '';
+    
+    if (!pages.length) {
+        elements.mappingStatus.textContent = 'No mapping detected';
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="5">No mapping detected</td>`;
+        elements.mappingBody.appendChild(row);
+        return;
+    }
+    
+    const sorted = [...pages].sort((a, b) => (a.pdf_page_index ?? 0) - (b.pdf_page_index ?? 0));
+    sorted.forEach(p => {
+        const tr = document.createElement('tr');
+        const pdfPage = (p.pdf_page_index ?? 0) + 1;
+        const schematicPage = p.schematic_page_number ?? '-';
+        const dwg = p.dwg_no || '-';
+        const title = p.drawing_title || '-';
+        const conf = p.confidence !== undefined && p.confidence !== null ? p.confidence.toFixed(2) : '-';
+        tr.innerHTML = `
+            <td>${pdfPage}</td>
+            <td>${schematicPage}</td>
+            <td>${escapeHtml(dwg)}</td>
+            <td>${escapeHtml(title)}</td>
+            <td>${conf}</td>
+        `;
+        elements.mappingBody.appendChild(tr);
+    });
+    
+    elements.mappingStatus.textContent = `Detected ${pages.length} page${pages.length === 1 ? '' : 's'}`;
 }
 
 function handleExtractionComplete(data) {
@@ -406,6 +453,9 @@ document.addEventListener('DOMContentLoaded', () => {
         totalComponents: document.getElementById('total-components'),
         totalConnections: document.getElementById('total-connections'),
         totalWireLabels: document.getElementById('total-wire-labels'),
+        mappingSection: document.getElementById('mapping-section'),
+        mappingBody: document.getElementById('mapping-body'),
+        mappingStatus: document.getElementById('mapping-status'),
         
         // Search section
         searchSection: document.getElementById('search-section'),

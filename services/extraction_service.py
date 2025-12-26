@@ -24,6 +24,7 @@ from .pdf_processor import PDFProcessor
 class ExtractionEvent:
     """Event types for streaming extraction progress."""
     PROGRESS = "progress"
+    PAGE_MAPPING = "page_mapping"
     COMPONENT = "component"
     CONNECTION = "connection"
     WIRE_LABEL = "wire_label"
@@ -162,22 +163,52 @@ class ExtractionService:
                 except Exception as e:
                     logger.error(f"Gemini page detection failed: {e}")
                     # Fallback: no page numbers detected
-                    page_mapping = {idx: None for idx in pdf_page_indices}
+                    page_mapping = {
+                        idx: {
+                            "schematic_page_number": None,
+                            "schematic_total": None,
+                            "dwg_no": None,
+                            "drawing_title": None,
+                            "confidence": None,
+                            "raw_text": None
+                        } for idx in pdf_page_indices
+                    }
                 
                 # Store page mappings
-                for pdf_idx, schematic_num in page_mapping.items():
+                for pdf_idx, meta in page_mapping.items():
+                    schematic_num = meta.get("schematic_page_number") if meta else None
                     width, height = processor.get_page_dimensions(pdf_idx)
                     page = SchematicPage(
                         schematic_file_id=schematic_file.id,
                         pdf_page_index=pdf_idx,
                         schematic_page_number=schematic_num,
+                        schematic_total=meta.get("schematic_total") if meta else None,
+                        dwg_no=meta.get("dwg_no") if meta else None,
+                        drawing_title=meta.get("drawing_title") if meta else None,
                         width=width,
                         height=height,
-                        detection_confidence=1.0 if schematic_num else 0.5,
+                        detection_confidence=meta.get("confidence") if meta and meta.get("confidence") is not None else (1.0 if schematic_num else 0.5),
                         is_processed=False
                     )
                     self.db.add(page)
                 self.db.commit()
+                
+                # Emit page mapping to frontend
+                mapping_payload = []
+                for pdf_idx, meta in page_mapping.items():
+                    mapping_payload.append({
+                        "pdf_page_index": pdf_idx,
+                        "schematic_page_number": meta.get("schematic_page_number") if meta else None,
+                        "schematic_total": meta.get("schematic_total") if meta else None,
+                        "dwg_no": meta.get("dwg_no") if meta else None,
+                        "drawing_title": meta.get("drawing_title") if meta else None,
+                        "confidence": meta.get("confidence") if meta else None,
+                        "raw_text": meta.get("raw_text") if meta else None
+                    })
+                
+                yield self._emit(ExtractionEvent.PAGE_MAPPING, {
+                    "pages": mapping_payload
+                }, schematic_file.id)
                 
                 # Step 4: Process each page sequentially
                 pages_processed = 0
@@ -191,7 +222,8 @@ class ExtractionService:
                         self.db.commit()
                         return
                     
-                    schematic_num = page_mapping.get(pdf_idx)
+                    meta = page_mapping.get(pdf_idx) or {}
+                    schematic_num = meta.get("schematic_page_number")
                     
                     yield self._emit(ExtractionEvent.PROGRESS, {
                         "status": "extracting",

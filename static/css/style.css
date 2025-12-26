@@ -286,6 +286,13 @@ button.primary {
     max-height: 400px;
     overflow-y: auto;
     margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+.table-container.small {
+    max-height: 260px;
 }
 
 table {
@@ -317,6 +324,24 @@ td {
 
 tr:hover td {
     background: var(--bg-secondary);
+}
+
+/* Mapping section */
+#mapping-section {
+    margin-bottom: 1.5rem;
+}
+
+.mapping-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.mapping-status {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
 /* Type badges */
