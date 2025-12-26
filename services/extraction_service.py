@@ -134,35 +134,47 @@ class ExtractionService:
         
         try:
             with PDFProcessor(pdf_path) as processor:
-                # Step 1: Upload PDF to Gemini (once)
+                # Step 1: Upload PDF to Gemini Files API
                 yield self._emit(ExtractionEvent.PROGRESS, {
                     "status": "uploading",
-                    "message": "Uploading PDF to Gemini API..."
+                    "message": "Uploading PDF to Gemini Files API..."
                 }, schematic_file.id)
                 
-                file_uri = self.gemini.upload_file(pdf_path, display_name=schematic_file.filename)
-                schematic_file.gemini_file_uri = file_uri
+                uploaded_file = self.gemini.upload_file(pdf_path, display_name=schematic_file.filename)
+                schematic_file.gemini_file_uri = uploaded_file.name
                 self.db.commit()
                 
-                # Step 2: Extract context text
+                # Step 2: Create cached content (for 90% cost savings on subsequent calls)
+                yield self._emit(ExtractionEvent.PROGRESS, {
+                    "status": "caching",
+                    "message": "Creating cached content..."
+                }, schematic_file.id)
+                
+                cached_content = self.gemini.create_cached_content(
+                    uploaded_file=uploaded_file,
+                    system_instruction="You are an expert at analyzing industrial electrical schematics.",
+                    use_flash=False,  # Use Pro for accuracy
+                    ttl="3600s"
+                )
+                
+                # Step 3: Extract context text (instructions/legend)
                 context_text = processor.extract_context_pages_text(
                     instructions_page=context_page_indices[0] if len(context_page_indices) > 0 else 1,
                     legend_page=context_page_indices[1] if len(context_page_indices) > 1 else 2
                 )
                 
-                # Step 3: Detect page numbers using Gemini (all at once)
+                # Step 4: Detect title blocks using cached content
                 yield self._emit(ExtractionEvent.PROGRESS, {
-                    "status": "detecting_pages",
-                    "message": f"Identifying schematic page numbers for {len(pdf_page_indices)} pages..."
+                    "status": "detecting_title_blocks",
+                    "message": f"Detecting title blocks for {len(pdf_page_indices)} pages..."
                 }, schematic_file.id)
                 
-                # Use Gemini to detect all page numbers in one call
                 try:
-                    page_mapping = self.gemini.detect_all_page_numbers(file_uri, pdf_page_indices)
-                    logger.info(f"Page mapping detected: {page_mapping}")
+                    page_mapping = self.gemini.detect_title_blocks(cached_content, pdf_page_indices)
+                    logger.info(f"Title blocks detected: {page_mapping}")
                 except Exception as e:
-                    logger.error(f"Gemini page detection failed: {e}")
-                    # Fallback: no page numbers detected
+                    logger.error(f"Title block detection failed: {e}")
+                    # Fallback: empty mapping
                     page_mapping = {
                         idx: {
                             "schematic_page_number": None,
@@ -239,7 +251,7 @@ class ExtractionService:
                     try:
                         for result in self._extract_page(
                             schematic_file=schematic_file,
-                            file_uri=file_uri,
+                            cached_content=cached_content,
                             pdf_page_index=pdf_idx,
                             schematic_page_number=schematic_num,
                             context_text=context_text,
@@ -312,20 +324,20 @@ class ExtractionService:
     def _extract_page(
         self,
         schematic_file: SchematicFile,
-        file_uri: str,
+        cached_content: Any,
         pdf_page_index: int,
         schematic_page_number: Optional[int],
         context_text: str,
-        page_mapping: Dict[int, Optional[int]]
+        page_mapping: Dict[int, Dict[str, Any]]
     ) -> Generator[ExtractionResult, None, None]:
         """
-        Extract data from a single page.
+        Extract data from a single page using cached content.
         
         Yields extraction results for each component, connection, and wire label.
         """
-        # Call Gemini API
+        # Call Gemini API with cached content
         extraction_data = self.gemini.extract_page(
-            file_uri=file_uri,
+            cached_content=cached_content,
             pdf_page_index=pdf_page_index,
             context_text=context_text,
             page_mapping=page_mapping
