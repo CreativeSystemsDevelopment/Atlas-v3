@@ -324,16 +324,24 @@ Only return the JSON object, nothing else."""
         
         file_ref = genai.get_file(file_uri.split("/")[-1]) if "/" in file_uri else genai.get_file(file_uri)
         
+        # Use a schema that avoids additionalProperties (unsupported by Gemini schema validation)
         schema = {
             "type": "object",
             "properties": {
                 "page_mapping": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "oneOf": [
-                            {"type": "integer"},
-                            {"type": "null"}
-                        ]
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "pdf_page": {"type": "integer"},
+                            "schematic_page_number": {
+                                "oneOf": [
+                                    {"type": "integer"},
+                                    {"type": "null"}
+                                ]
+                            }
+                        },
+                        "required": ["pdf_page"]
                     }
                 },
                 "total_schematic_pages": {
@@ -364,14 +372,18 @@ Only return the JSON object, nothing else."""
             
             import json
             result = json.loads(response.text)
-            page_mapping = result.get("page_mapping", {})
+            page_mapping_items = result.get("page_mapping", []) or []
             
-            # Convert string keys to int and map to 0-based indices
-            result_mapping = {}
-            for pdf_idx in pdf_page_indices:
-                pdf_page_str = str(pdf_idx + 1)  # Convert to 1-based for lookup
-                schematic_num = page_mapping.get(pdf_page_str)
-                result_mapping[pdf_idx] = schematic_num if schematic_num is not None else None
+            # Build dict from array items
+            page_mapping = {}
+            for item in page_mapping_items:
+                pdf_page_num = item.get("pdf_page")
+                schematic_num = item.get("schematic_page_number")
+                if pdf_page_num is not None:
+                    page_mapping[int(pdf_page_num) - 1] = schematic_num  # convert to 0-based
+            
+            # Ensure all requested pages are present
+            result_mapping = {idx: page_mapping.get(idx) for idx in pdf_page_indices}
             
             logger.info(f"Detected page mapping: {result_mapping}")
             return result_mapping
