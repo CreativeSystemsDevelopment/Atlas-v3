@@ -149,21 +149,20 @@ class ExtractionService:
                     legend_page=context_page_indices[1] if len(context_page_indices) > 1 else 2
                 )
                 
-                # Step 3: Detect page numbers using Gemini
+                # Step 3: Detect page numbers using Gemini (all at once)
                 yield self._emit(ExtractionEvent.PROGRESS, {
                     "status": "detecting_pages",
-                    "message": "Detecting schematic page numbers with AI..."
+                    "message": f"Identifying schematic page numbers for {len(pdf_page_indices)} pages..."
                 }, schematic_file.id)
                 
-                # Use Gemini to detect page numbers (more accurate than regex)
-                page_mapping = {}
-                for pdf_idx in pdf_page_indices:
-                    try:
-                        schematic_num = self.gemini.detect_page_number(file_uri, pdf_idx)
-                        page_mapping[pdf_idx] = schematic_num
-                    except Exception as e:
-                        logger.warning(f"Gemini page detection failed for page {pdf_idx}: {e}")
-                        page_mapping[pdf_idx] = None
+                # Use Gemini to detect all page numbers in one call
+                try:
+                    page_mapping = self.gemini.detect_all_page_numbers(file_uri, pdf_page_indices)
+                    logger.info(f"Page mapping detected: {page_mapping}")
+                except Exception as e:
+                    logger.error(f"Gemini page detection failed: {e}")
+                    # Fallback: no page numbers detected
+                    page_mapping = {idx: None for idx in pdf_page_indices}
                 
                 # Store page mappings
                 for pdf_idx, schematic_num in page_mapping.items():

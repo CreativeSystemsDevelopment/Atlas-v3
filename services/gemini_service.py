@@ -273,13 +273,121 @@ class GeminiService:
         
         raise RuntimeError("Extraction failed after max retries")
     
+    def detect_all_page_numbers(
+        self,
+        file_uri: str,
+        pdf_page_indices: List[int]
+    ) -> Dict[int, Optional[int]]:
+        """
+        Detect schematic page numbers for multiple pages in one call.
+        More efficient than calling detect_page_number multiple times.
+        
+        Args:
+            file_uri: Cached file URI
+            pdf_page_indices: List of 0-based page indices to check
+            
+        Returns:
+            Dict mapping pdf_page_index -> schematic_page_number (or None)
+        """
+        if not pdf_page_indices:
+            return {}
+        
+        # Build prompt asking for all pages at once
+        page_list = ", ".join([str(idx + 1) for idx in pdf_page_indices])
+        prompt = f"""You are analyzing a schematic diagram PDF. 
+
+For each of the following PDF pages: {page_list}
+
+Look at the title block (usually at the bottom right of each page).
+Find the schematic page number in the format "X/Y" (e.g., "1/207" means schematic page 1 of 207 total).
+The "X" is the schematic page number we need.
+
+Return a JSON object mapping PDF page numbers to schematic page numbers:
+{{
+  "page_mapping": {{
+    "<pdf_page_number>": <schematic_page_number or null>
+  }},
+  "total_schematic_pages": <total from any page's X/Y format or null>
+}}
+
+Example:
+{{
+  "page_mapping": {{
+    "7": 1,
+    "8": 2,
+    "9": 3
+  }},
+  "total_schematic_pages": 207
+}}
+
+Only return the JSON object, nothing else."""
+        
+        file_ref = genai.get_file(file_uri.split("/")[-1]) if "/" in file_uri else genai.get_file(file_uri)
+        
+        schema = {
+            "type": "object",
+            "properties": {
+                "page_mapping": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "oneOf": [
+                            {"type": "integer"},
+                            {"type": "null"}
+                        ]
+                    }
+                },
+                "total_schematic_pages": {
+                    "oneOf": [
+                        {"type": "integer"},
+                        {"type": "null"}
+                    ]
+                }
+            },
+            "required": ["page_mapping"]
+        }
+        
+        generation_config = {
+            "temperature": 0.1,
+            "response_mime_type": "application/json",
+            "response_schema": schema
+        }
+        
+        model = self._get_model(use_flash=True)
+        
+        try:
+            logger.info(f"Detecting page numbers for PDF pages: {page_list}")
+            response = model.generate_content(
+                contents=[file_ref, prompt],
+                generation_config=generation_config,
+                request_options={"timeout": 60}
+            )
+            
+            import json
+            result = json.loads(response.text)
+            page_mapping = result.get("page_mapping", {})
+            
+            # Convert string keys to int and map to 0-based indices
+            result_mapping = {}
+            for pdf_idx in pdf_page_indices:
+                pdf_page_str = str(pdf_idx + 1)  # Convert to 1-based for lookup
+                schematic_num = page_mapping.get(pdf_page_str)
+                result_mapping[pdf_idx] = schematic_num if schematic_num is not None else None
+            
+            logger.info(f"Detected page mapping: {result_mapping}")
+            return result_mapping
+            
+        except Exception as e:
+            logger.error(f"Page number detection failed: {e}")
+            # Fallback: return None for all pages
+            return {idx: None for idx in pdf_page_indices}
+    
     def detect_page_number(
         self,
         file_uri: str,
         pdf_page_index: int
     ) -> Optional[int]:
         """
-        Detect schematic page number from title block.
+        Detect schematic page number from title block (single page).
         Uses Flash model for speed.
         
         Args:
@@ -289,37 +397,8 @@ class GeminiService:
         Returns:
             Schematic page number or None if not detected
         """
-        prompt = f"""Look at page {pdf_page_index + 1} of this PDF.
-Find the title block (usually at the bottom right of the page).
-Extract the schematic page number from the format "X/Y" (e.g., "1/207" means page 1).
-
-Return ONLY a JSON object:
-{{"schematic_page_number": <number or null>, "total_pages": <number or null>, "confidence": <0.0-1.0>}}
-"""
-        
-        file_ref = genai.get_file(file_uri.split("/")[-1]) if "/" in file_uri else genai.get_file(file_uri)
-        
-        generation_config = {
-            "temperature": 0.1,
-            "response_mime_type": "application/json",
-        }
-        
-        model = self._get_model(use_flash=True)
-        
-        try:
-            response = model.generate_content(
-                contents=[file_ref, prompt],
-                generation_config=generation_config,
-                request_options={"timeout": 30}
-            )
-            
-            import json
-            result = json.loads(response.text)
-            return result.get("schematic_page_number")
-            
-        except Exception as e:
-            print(f"Warning: Page number detection failed for page {pdf_page_index}: {e}")
-            return None
+        result = self.detect_all_page_numbers(file_uri, [pdf_page_index])
+        return result.get(pdf_page_index)
     
     def _build_extraction_prompt(
         self,
