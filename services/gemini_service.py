@@ -4,10 +4,15 @@ Handles file upload, caching, and structured extraction with JSON Schema.
 """
 import time
 import random
+import logging
 from typing import Optional, Dict, Any, List, Generator
 from pathlib import Path
 
 import google.generativeai as genai
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 from config import Config
@@ -109,6 +114,7 @@ class GeminiService:
         if not Config.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is required")
         
+        logger.info(f"Initializing Gemini service with model: {Config.GEMINI_MODEL}")
         genai.configure(api_key=Config.GEMINI_API_KEY)
         
         self.model_name = Config.GEMINI_MODEL
@@ -162,9 +168,12 @@ class GeminiService:
         
         display_name = display_name or file_path.name
         
+        logger.info(f"Uploading file to Gemini: {file_path}")
+        
         # Upload with retry
         for attempt in range(self.max_retries):
             try:
+                logger.debug(f"Upload attempt {attempt + 1}/{self.max_retries}")
                 uploaded_file = genai.upload_file(
                     path=str(file_path),
                     display_name=display_name
@@ -184,6 +193,7 @@ class GeminiService:
                 return file_uri
                 
             except Exception as e:
+                logger.error(f"Upload attempt {attempt + 1} failed: {e}")
                 if attempt == self.max_retries - 1:
                     raise
                 delay = self._calculate_backoff(attempt)
@@ -231,14 +241,19 @@ class GeminiService:
         
         model = self._get_model()
         
+        logger.info(f"Extracting page {pdf_page_index} with model {self.model_name}")
+        
         # Retry with backoff
         for attempt in range(self.max_retries):
             try:
+                logger.debug(f"Extraction attempt {attempt + 1}/{self.max_retries}")
                 response = model.generate_content(
                     contents=[file_ref, prompt],
                     generation_config=generation_config,
                     request_options={"timeout": self.timeout}
                 )
+                
+                logger.debug(f"Got response: {response.text[:500] if response.text else 'No text'}")
                 
                 # Parse JSON response
                 import json
