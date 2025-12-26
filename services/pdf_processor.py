@@ -23,7 +23,16 @@ class PDFProcessor:
     """
     
     # Regex pattern for schematic page number (e.g., "1/207", "25/207")
-    PAGE_NUMBER_PATTERN = re.compile(r'(\d+)\s*/\s*(\d+)')
+    # Also matches full-width Japanese numerals (１/２０７)
+    PAGE_NUMBER_PATTERN = re.compile(r'([0-9０-９]+)\s*[/／]\s*([0-9０-９]+)')
+    
+    # Full-width to half-width digit mapping
+    FULLWIDTH_DIGITS = str.maketrans('０１２３４５６７８９', '0123456789')
+    
+    @classmethod
+    def _fullwidth_to_int(cls, s: str) -> int:
+        """Convert a string with full-width digits to an integer."""
+        return int(s.translate(cls.FULLWIDTH_DIGITS))
     
     def __init__(self, pdf_path: Path):
         """
@@ -175,8 +184,11 @@ class PDFProcessor:
         if matches:
             # Take the last match (most likely to be the page number)
             page_num, total = matches[-1]
-            logger.info(f"Detected schematic page: {page_num}/{total}")
-            return int(page_num)
+            # Convert full-width numbers to regular integers
+            page_num_int = self._fullwidth_to_int(page_num)
+            total_int = self._fullwidth_to_int(total)
+            logger.info(f"Detected schematic page: {page_num_int}/{total_int}")
+            return page_num_int
         
         # Also try looking in full page if not found
         if not matches:
@@ -184,8 +196,10 @@ class PDFProcessor:
             all_matches = self.PAGE_NUMBER_PATTERN.findall(full_text)
             if all_matches:
                 page_num, total = all_matches[-1]
-                logger.info(f"Detected schematic page from full text: {page_num}/{total}")
-                return int(page_num)
+                page_num_int = self._fullwidth_to_int(page_num)
+                total_int = self._fullwidth_to_int(total)
+                logger.info(f"Detected schematic page from full text: {page_num_int}/{total_int}")
+                return page_num_int
         
         logger.warning("Could not detect schematic page number")
         return None
